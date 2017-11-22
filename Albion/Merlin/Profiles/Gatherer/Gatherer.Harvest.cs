@@ -1,4 +1,5 @@
-﻿using Merlin.Pathing;
+﻿using Albion_Direct;
+using Albion_Direct.Pathing;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -173,15 +174,6 @@ namespace Merlin.Profiles.Gatherer
             if ((_currentTarget != null ? _currentTarget.name : "none") == "none")
                 Profile.UpdateDelay = System.TimeSpan.FromSeconds(0.1d);
             
-            if (_localPlayerCharacterView.IsUnderAttack(out FightingObjectView attacker))
-            {
-                _localPlayerCharacterView.CreateTextEffect("[Attacked]");
-                _state.Fire(Trigger.EncounteredAttacker);
-                return;
-            }
-            
-            _localPlayerCharacterView.AttackSelectedObject();
-            
             if (StuckProtection())
                 return;
             
@@ -189,14 +181,21 @@ namespace Merlin.Profiles.Gatherer
 
             if (!ValidateTarget(_currentTarget))
             {
+                Core.Log("Resource DepletedSearch for new one.");
                 _state.Fire(Trigger.DepletedResource);
                 return;
             }
 
             if (_currentTarget is HarvestableObjectView harvestableObject)
+            {
+                //Core.Log("Begin Harvest of Resource");
                 HarvestHarvestableObjec(harvestableObject);
+            }
             else if (_currentTarget is MobView mob)
+            {
+                //Core.Log("Begin Harvest of Mob");
                 HarvestMob(mob);
+            }
         }
 
         public void HarvestHarvestableObjec(HarvestableObjectView resource)
@@ -207,8 +206,8 @@ namespace Merlin.Profiles.Gatherer
             //Skip if target is inside a kepper pack
             if (_skipKeeperPacks && (ContainKeepers(_currentTarget.transform.position)))
             {
-                Core.Log("[Skipped - Inside Kepper Pack Range]");
-                Blacklist(resource, TimeSpan.FromHours(24));
+                Core.Log("[Blacklisted - Inside Kepper Pack Range]");
+                Blacklist(resource, TimeSpan.FromMinutes(5));
                 _state.Fire(Trigger.DepletedResource);
                 return;
             }
@@ -223,8 +222,9 @@ namespace Merlin.Profiles.Gatherer
             {
                 if (_localPlayerCharacterView.TryFindPath(new ClusterPathfinder(), targetCenter, IsBlockedGathering, out List<Vector3> pathing))
                 {
-                    //Core.lineRenderer.positionCount = pathing.Count;
-                    //Core.lineRenderer.SetPositions(pathing.ToArray());
+                    Core.Log("Path found, begin travel to resource");
+                    Core.lineRenderer.positionCount = pathing.Count;
+                    Core.lineRenderer.SetPositions(pathing.ToArray());
                     _harvestPathingRequest = new ClusterPathingRequest(_localPlayerCharacterView, _currentTarget, pathing);
                 }
                 else
@@ -236,22 +236,26 @@ namespace Merlin.Profiles.Gatherer
             }
 
             if (_localPlayerCharacterView.IsHarvesting())
+            {
+                Core.Log("Currently harvesting.Wait until done.");
                 return;
+            }
 
             if (resource.GetHarvestableObject().GetCharges() <= 0)
             {
+                Core.Log("resource depleted. Move on");
                 _state.Fire(Trigger.DepletedResource);
                 return;
             }
 
-            Core.Log("[Harvesting]");
+            Core.Log("[Harvesting] - Interact with resource");
             _localPlayerCharacterView.Interact(resource);
 
             var harvestableObject2 = resource.GetHarvestableObject();
 
             var resourceType = harvestableObject2.GetResourceType().Value;
-            var tier = (Tier)harvestableObject2.GetTier();
-            var enchantmentLevel = (EnchantmentLevel)harvestableObject2.GetRareState();
+            var tier = (Albion_Direct.Tier)harvestableObject2.GetTier();
+            var enchantmentLevel = (Albion_Direct.EnchantmentLevel)harvestableObject2.GetRareState();
 
             var info = new GatherInformation(resourceType, tier, enchantmentLevel)
             {
@@ -273,8 +277,8 @@ namespace Merlin.Profiles.Gatherer
             //Skip if target is inside a kepper pack
             if (_skipKeeperPacks && (ContainKeepers(_currentTarget.transform.position)))
             {
-                Core.Log("[Skipped - Inside Kepper Pack Range]");
-                Blacklist(mob, TimeSpan.FromHours(24));
+                Core.Log("[Blacklisted - Inside Kepper Pack Range]");
+                Blacklist(mob, TimeSpan.FromMinutes(5));
                 _state.Fire(Trigger.DepletedResource);
                 return;
             }
@@ -295,8 +299,9 @@ namespace Merlin.Profiles.Gatherer
             {
                 if (_localPlayerCharacterView.TryFindPath(new ClusterPathfinder(), targetCenter, IsBlockedGathering, out List<Vector3> pathing))
                 {
-                    //Core.lineRenderer.positionCount = pathing.Count;
-                    //Core.lineRenderer.SetPositions(pathing.ToArray());
+                    Core.Log("Path found, begin travel to Mob");
+                    Core.lineRenderer.positionCount = pathing.Count;
+                    Core.lineRenderer.SetPositions(pathing.ToArray());
                     _harvestPathingRequest = new ClusterPathingRequest(_localPlayerCharacterView, _currentTarget, pathing);
                 }
                 else
@@ -308,7 +313,10 @@ namespace Merlin.Profiles.Gatherer
             }
 
             if (_localPlayerCharacterView.IsAttacking())
+            {
+                Core.Log("Currently Attacking Mob. Wait until done.");
                 return;
+            }
 
             if (mob.IsDead() && mob.DeadAnimationFinished)
             {
